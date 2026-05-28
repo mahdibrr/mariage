@@ -55,8 +55,8 @@ export default function MasonryGallery() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4 px-6 text-center">
         <div className="text-7xl opacity-20">📷</div>
-        <p className="text-gold-500 font-display text-xl font-bold">لا توجد صور بعد</p>
-        <p className="text-gold-700 font-body text-sm">كن أول من يشارك لحظاته!</p>
+        <p className="text-gold-500 font-display text-xl font-bold">مازالش كان صور</p>
+        <p className="text-gold-700 font-body text-sm">كون لول واحد يحط صورة! 🎉</p>
       </div>
     );
   }
