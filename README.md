@@ -1,36 +1,136 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 💍 منصة مشاركة صور الأعراس
 
-## Getting Started
+منصة عربية فاخرة لمشاركة صور حفل الزفاف — Next.js 16 + Cloudflare R2 + Vercel
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🚀 الإعداد السريع
+
+### 1. إعداد Cloudflare R2
+
+1. سجّل دخول إلى [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. انتقل إلى **R2 Object Storage** → **Create bucket** (مثلاً: `wedding-photos`)
+3. فعّل الوصول العام: **Settings → Public Access → Allow Access**
+4. احفظ رابط النطاق العام (مثلاً: `https://pub-xxx.r2.dev`)
+5. أنشئ API Token: **My Profile → API Tokens → Create Token** (أذونات: `Object Read & Write`)
+6. انسخ `Account ID` من صفحة R2 الرئيسية
+
+### 2. إعداد CORS على الـ Bucket
+
+في **Bucket → Settings → CORS Policy**، أضف:
+
+```json
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. المتغيرات البيئية
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+انسخ `.env.local.example` إلى `.env.local` واملأ القيم:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+R2_BUCKET_NAME=wedding-photos
+R2_PUBLIC_URL=https://pub-xxxxxxxx.r2.dev
 
-## Learn More
+NEXT_PUBLIC_WEDDING_COUPLE=أحمد ونور
+NEXT_PUBLIC_WEDDING_DATE=١٥ يونيو ٢٠٢٦
+NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
 
-To learn more about Next.js, take a look at the following resources:
+ADMIN_SECRET=your_secure_admin_password
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. تشغيل محلي
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install
+npm run dev
+```
 
-## Deploy on Vercel
+افتح [http://localhost:3000](http://localhost:3000)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📦 النشر على Vercel
+
+```bash
+npx vercel --prod
+```
+
+أو اربط مستودع GitHub بـ Vercel وأضف المتغيرات البيئية في **Settings → Environment Variables**.
+
+---
+
+## 🔑 لوحة الإدارة
+
+للوصول إلى ميزات الإدارة (تثبيت الصور):
+
+```
+https://your-domain.vercel.app/gallery?admin=YOUR_ADMIN_SECRET
+```
+
+---
+
+## 🗂 هيكل المشروع
+
+```
+src/
+├── app/
+│   ├── page.tsx              ← شاشة الترحيب
+│   ├── gallery/              ← المعرض الرئيسي + رفع الصور
+│   ├── timeline/             ← عرض الجدول الزمني
+│   ├── memory-wall/          ← جدار الذكريات (التهاني)
+│   ├── slideshow/            ← عرض شرائح للتلفزيون
+│   └── api/                  ← مسارات API
+│       ├── upload/presigned/ ← رابط رفع موقّع لـ R2
+│       ├── upload/complete/  ← تسجيل metadata الصورة
+│       ├── photos/           ← قائمة الصور مع pagination
+│       ├── reactions/        ← التفاعلات (❤️ 😍 🎉 🔥)
+│       ├── messages/         ← رسائل التهنئة
+│       └── admin/pin/        ← تثبيت الصور المفضلة
+├── components/
+│   ├── welcome/              ← شاشة الترحيب + QR
+│   ├── gallery/              ← Masonry + ImageViewer + Upload
+│   ├── timeline/             ← عرض زمني مصنّف
+│   ├── memory/               ← جدار التهاني
+│   ├── slideshow/            ← عرض الشرائح
+│   ├── navigation/           ← شريط التنقل السفلي
+│   └── ui/                   ← مكونات مشتركة
+└── lib/
+    ├── r2.ts                 ← عميل Cloudflare R2
+    ├── types.ts              ← تعريفات TypeScript
+    └── utils.ts              ← دوال مساعدة
+```
+
+---
+
+## 🎨 المميزات
+
+| الميزة | الوصف |
+|--------|-------|
+| 🖼️ معرض Masonry | تخطيط Pinterest بالتحميل الكسول |
+| 📷 رفع مباشر | الكاميرا + المعرض + سحب وإفلات |
+| ❤️ تفاعلات | ❤️ 😍 🎉 🔥 بدون حساب |
+| 📅 جدول زمني | الاستقبال → الحفل → العشاء → الرقص |
+| 💌 جدار الذكريات | تهاني الضيوف بالعربية |
+| 📺 عرض شرائح | وضع تلفزيون للعرض في القاعة |
+| 📱 QR Code | مسح واحد للدخول الفوري |
+| 📌 مفضلة العروسين | تثبيت الصور من لوحة الإدارة |
+
+---
+
+## ⚡ الأداء
+
+- رفع مباشر إلى R2 عبر Presigned URLs (بدون مرور بالسيرفر)
+- تحميل كسول للصور مع Skeleton loading
+- Infinite scroll مع Cursor-based pagination
+- تفاعلات append-only (بدون race conditions)
