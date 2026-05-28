@@ -118,7 +118,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
               className="btn-gold w-full py-5 rounded-2xl text-xl font-body font-bold flex items-center justify-center gap-3 text-dark disabled:opacity-40"
             >
               <span className="text-2xl">📸</span>
-              <span>صوّر دابا</span>
+              <span>صوّر توا</span>
             </button>
             <button
               onClick={() => fileRef.current?.click()}
