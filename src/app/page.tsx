@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function HomePage() {
   return (
@@ -18,9 +19,16 @@ export default function HomePage() {
 
       {/* Center content */}
       <div className="flex-1 flex flex-col items-center justify-center gap-8 text-center">
-        {/* Ring icon */}
-        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-gold-400/20 to-gold-600/10 border-2 border-gold-500/30 flex items-center justify-center animate-[float_3s_ease-in-out_infinite]">
-          <span className="text-5xl">💍</span>
+        {/* Cover image */}
+        <div className="w-40 h-40 rounded-full overflow-hidden border-2 border-gold-500/30 shadow-xl shadow-gold-500/10 animate-[float_3s_ease-in-out_infinite]">
+          <Image
+            src="/image.png"
+            alt="هيثم وأميرة"
+            width={160}
+            height={160}
+            className="w-full h-full object-cover"
+            priority
+          />
         </div>
 
         {/* Names */}
