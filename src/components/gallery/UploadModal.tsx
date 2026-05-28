@@ -24,10 +24,17 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
   const addFiles = useCallback((newFiles: File[]) => {
     const images = newFiles.filter((f) => f.type.startsWith("image/")).slice(0, 10);
-    setFiles((prev) => [
-      ...prev,
-      ...images.map((f) => ({ file: f, preview: URL.createObjectURL(f), progress: 0, status: "pending" as const })),
-    ].slice(0, 10));
+    setFiles((prev) =>
+      [
+        ...prev,
+        ...images.map((f) => ({
+          file: f,
+          preview: URL.createObjectURL(f),
+          progress: 0,
+          status: "pending" as const,
+        })),
+      ].slice(0, 10)
+    );
   }, []);
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -35,54 +42,69 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   };
 
   const removeFile = (i: number) => {
-    setFiles((prev) => { URL.revokeObjectURL(prev[i].preview); return prev.filter((_, idx) => idx !== i); });
+    setFiles((prev) => {
+      URL.revokeObjectURL(prev[i].preview);
+      return prev.filter((_, idx) => idx !== i);
+    });
   };
 
   const uploadAll = async () => {
     if (!files.length) return;
     setUploading(true);
 
+    // Fetch Cloudinary config once
+    const config = await fetch("/api/upload/presigned").then((r) => r.json());
+    const { cloudName, uploadPreset, folder } = config;
+
     for (let i = 0; i < files.length; i++) {
       if (files[i].status === "done") continue;
-      setFiles((p) => p.map((f, idx) => idx === i ? { ...f, status: "uploading", progress: 10 } : f));
+      setFiles((p) => p.map((f, idx) => (idx === i ? { ...f, status: "uploading", progress: 5 } : f)));
 
       try {
-        const { uploadUrl, photoId, key, publicUrl } = await fetch("/api/upload/presigned", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contentType: files[i].file.type }),
-        }).then((r) => r.json());
+        const formData = new FormData();
+        formData.append("file", files[i].file);
+        formData.append("upload_preset", uploadPreset);
+        formData.append("folder", folder);
+        if (uploaderName.trim()) {
+          formData.append("context", `uploaderName=${uploaderName.trim().slice(0, 50)}`);
+        }
 
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              setFiles((p) => p.map((f, idx) => idx === i ? { ...f, progress: 20 + Math.round((e.loaded / e.total) * 70) } : f));
-            }
-          };
-          xhr.onload = () => (xhr.status < 400 ? resolve() : reject());
-          xhr.onerror = reject;
-          xhr.open("PUT", uploadUrl);
-          xhr.setRequestHeader("Content-Type", files[i].file.type);
-          xhr.send(files[i].file);
-        });
+        const result = await new Promise<{ public_id: string; secure_url: string }>(
+          (resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                setFiles((p) =>
+                  p.map((f, idx) =>
+                    idx === i ? { ...f, progress: Math.round((e.loaded / e.total) * 95) } : f
+                  )
+                );
+              }
+            };
+            xhr.onload = () => {
+              if (xhr.status < 400) resolve(JSON.parse(xhr.responseText));
+              else reject(new Error(xhr.statusText));
+            };
+            xhr.onerror = reject;
+            xhr.open("POST", `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`);
+            xhr.send(formData);
+          }
+        );
 
-        const dims = await getDimensions(files[i].file);
-        await fetch("/api/upload/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: photoId, key, publicUrl, ...dims, uploaderName: uploaderName.trim() || undefined }),
-        });
-
-        setFiles((p) => p.map((f, idx) => idx === i ? { ...f, status: "done", progress: 100 } : f));
+        void result; // URL is in Cloudinary, photos API fetches it
+        setFiles((p) =>
+          p.map((f, idx) => (idx === i ? { ...f, status: "done", progress: 100 } : f))
+        );
       } catch {
-        setFiles((p) => p.map((f, idx) => idx === i ? { ...f, status: "error", progress: 0 } : f));
+        setFiles((p) =>
+          p.map((f, idx) => (idx === i ? { ...f, status: "error", progress: 0 } : f))
+        );
       }
     }
 
     setUploading(false);
     onUploaded();
-    setTimeout(onClose, 800);
+    setTimeout(onClose, 600);
   };
 
   const doneCount = files.filter((f) => f.status === "done").length;
@@ -92,7 +114,12 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     <div className="fixed inset-0 z-50 flex flex-col bg-dark">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-gold-800/30">
-        <button onClick={onClose} className="w-9 h-9 rounded-full border border-gold-700/40 flex items-center justify-center text-gold-400">✕</button>
+        <button
+          onClick={onClose}
+          className="w-9 h-9 rounded-full border border-gold-700/40 flex items-center justify-center text-gold-400"
+        >
+          ✕
+        </button>
         <h2 className="text-gold-200 font-display text-lg font-bold">رفع الصور</h2>
         <span className="text-gold-600 text-sm font-body">{files.length}/10</span>
       </div>
@@ -107,11 +134,23 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
             onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(Array.from(e.dataTransfer.files)); }}
             onClick={() => fileRef.current?.click()}
           >
-            <div className="w-16 h-16 rounded-full bg-gold-500/10 border border-gold-500/30 flex items-center justify-center text-3xl">📷</div>
+            <div className="w-16 h-16 rounded-full bg-gold-500/10 border border-gold-500/30 flex items-center justify-center text-3xl">
+              📷
+            </div>
             <p className="text-gold-200 font-body font-semibold">اختر صوراً من معرضك</p>
             <div className="flex gap-3">
-              <button onClick={(e) => { e.stopPropagation(); cameraRef.current?.click(); }} className="px-4 py-2 rounded-xl bg-gold-500/10 border border-gold-500/30 text-gold-300 text-sm font-body flex items-center gap-2">📸 الكاميرا</button>
-              <button onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} className="px-4 py-2 rounded-xl bg-gold-500/10 border border-gold-500/30 text-gold-300 text-sm font-body flex items-center gap-2">🖼️ المعرض</button>
+              <button
+                onClick={(e) => { e.stopPropagation(); cameraRef.current?.click(); }}
+                className="px-4 py-2 rounded-xl bg-gold-500/10 border border-gold-500/30 text-gold-300 text-sm font-body flex items-center gap-2"
+              >
+                📸 الكاميرا
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+                className="px-4 py-2 rounded-xl bg-gold-500/10 border border-gold-500/30 text-gold-300 text-sm font-body flex items-center gap-2"
+              >
+                🖼️ المعرض
+              </button>
             </div>
           </div>
         )}
@@ -119,7 +158,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onFileChange} />
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChange} />
 
-        {/* Preview */}
+        {/* Preview grid */}
         {files.length > 0 && (
           <div className="grid grid-cols-3 gap-2">
             {files.map((item, i) => (
@@ -137,7 +176,12 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                   </div>
                 )}
                 {item.status === "pending" && (
-                  <button onClick={() => removeFile(i)} className="absolute top-1 left-1 w-6 h-6 rounded-full bg-dark/80 text-white text-xs flex items-center justify-center">✕</button>
+                  <button
+                    onClick={() => removeFile(i)}
+                    className="absolute top-1 left-1 w-6 h-6 rounded-full bg-dark/80 text-white text-xs flex items-center justify-center"
+                  >
+                    ✕
+                  </button>
                 )}
                 {item.status === "uploading" && (
                   <div className="absolute bottom-0 inset-x-0 h-1 bg-dark-card">
@@ -170,19 +214,12 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
             disabled={uploading}
             className="btn-gold w-full py-4 rounded-2xl text-base font-body font-bold disabled:opacity-50"
           >
-            {uploading ? `جارٍ الرفع (${doneCount}/${files.length})...` : `رفع ${files.length} صورة ✨`}
+            {uploading
+              ? `جارٍ الرفع (${doneCount}/${files.length})...`
+              : `رفع ${files.length} صورة ✨`}
           </button>
         </div>
       )}
     </div>
   );
-}
-
-function getDimensions(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => resolve({ width: 1080, height: 1080 });
-    img.src = URL.createObjectURL(file);
-  });
 }

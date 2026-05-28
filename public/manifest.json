@@ -1,22 +1,10 @@
 {
-  "name": "حفل زفاف - معرض الصور",
+  "name": "حفل زفاف هيثم وأميرة",
   "short_name": "الزفاف",
   "description": "معرض صور حفل الزفاف",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1610",
   "theme_color": "#1a1610",
-  "orientation": "portrait",
-  "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+  "orientation": "portrait"
 }

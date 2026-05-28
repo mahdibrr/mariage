@@ -5,7 +5,7 @@ import Image from "next/image";
 import ImageViewer from "./ImageViewer";
 import type { PhotoMetadata } from "@/lib/types";
 
-export default function MasonryGallery({ key: _key }: { key?: number }) {
+export default function MasonryGallery() {
   const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);

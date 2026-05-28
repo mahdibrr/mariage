@@ -1,39 +1,24 @@
+// No-op for Cloudinary: metadata (width, height, url) is returned
+// directly by Cloudinary during upload. This route exists only
+// to add the uploaderName tag after the upload completes.
 import { NextRequest, NextResponse } from "next/server";
-import { putJsonObject } from "@/lib/r2";
-import { buildMetadataKey } from "@/lib/utils";
-import type { PhotoMetadata } from "@/lib/types";
+import cloudinary from "@/lib/cloudinary";
 
 export async function POST(req: NextRequest) {
   try {
-    const { id, key, publicUrl, width, height, uploaderName } = await req.json() as {
-      id: string;
-      key: string;
-      publicUrl: string;
-      width?: number;
-      height?: number;
-      uploaderName?: string;
-    };
+    const { publicId, uploaderName } = await req.json();
+    if (!publicId) return NextResponse.json({ ok: true });
 
-    if (!id || !key || !publicUrl) {
-      return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
+    if (uploaderName?.trim()) {
+      await cloudinary.uploader.add_context(
+        `uploaderName=${uploaderName.trim().slice(0, 50)}`,
+        [publicId]
+      );
     }
 
-    const metadata: PhotoMetadata = {
-      id,
-      key,
-      url: publicUrl,
-      width: width ?? 1080,
-      height: height ?? 1080,
-      aspectRatio: (height ?? 1080) / (width ?? 1080),
-      timestamp: new Date().toISOString(),
-      uploaderName: uploaderName?.trim().slice(0, 50) || undefined,
-    };
-
-    await putJsonObject(buildMetadataKey(id), metadata);
-
-    return NextResponse.json({ success: true, photo: metadata });
-  } catch (err) {
-    console.error("upload complete error:", err);
-    return NextResponse.json({ error: "فشل حفظ بيانات الصورة" }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  } catch {
+    // Non-critical — just return ok even if context update fails
+    return NextResponse.json({ ok: true });
   }
 }

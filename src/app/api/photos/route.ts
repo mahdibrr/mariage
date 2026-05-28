@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listObjects, getJsonObject } from "@/lib/r2";
-import { buildMetadataKey } from "@/lib/utils";
+import cloudinary from "@/lib/cloudinary";
 import type { PhotoMetadata } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
@@ -9,33 +8,37 @@ export async function GET(req: NextRequest) {
     const cursor = searchParams.get("cursor") ?? undefined;
     const limit = Math.min(Number(searchParams.get("limit") ?? 30), 60);
 
-    const listRes = await listObjects("metadata/", {
-      maxKeys: 200,
-      continuationToken: cursor,
+    const result = await cloudinary.api.resources({
+      type: "upload",
+      prefix: "wedding/",
+      max_results: limit,
+      next_cursor: cursor,
+      context: true,
+      direction: "desc",
     });
 
-    const keys = (listRes.Contents ?? []).map((o) => o.Key!).filter(Boolean);
-
-    const BATCH = 20;
-    const photos: PhotoMetadata[] = [];
-    for (let i = 0; i < keys.length; i += BATCH) {
-      const batch = keys.slice(i, i + BATCH);
-      const results = await Promise.all(
-        batch.map((k) => {
-          const id = k.replace("metadata/", "").replace(".json", "");
-          return getJsonObject<PhotoMetadata>(buildMetadataKey(id));
-        })
-      );
-      photos.push(...(results.filter(Boolean) as PhotoMetadata[]));
-    }
-
-    photos.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    const photos: PhotoMetadata[] = result.resources.map(
+      (r: {
+        public_id: string;
+        secure_url: string;
+        width: number;
+        height: number;
+        created_at: string;
+        context?: { custom?: { uploaderName?: string } };
+      }) => ({
+        id: r.public_id,
+        url: r.secure_url,
+        width: r.width,
+        height: r.height,
+        aspectRatio: r.height / r.width,
+        timestamp: r.created_at,
+        uploaderName: r.context?.custom?.uploaderName,
+      })
     );
 
     return NextResponse.json({
-      photos: photos.slice(0, limit),
-      nextCursor: listRes.NextContinuationToken ?? null,
+      photos,
+      nextCursor: result.next_cursor ?? null,
     });
   } catch (err) {
     console.error("photos list error:", err);
