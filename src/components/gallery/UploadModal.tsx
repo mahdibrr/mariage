@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, type ChangeEvent } from "react";
+import { useState, useRef, useCallback, type ChangeEvent } from "react";
 
 interface UploadModalProps {
   onClose: () => void;
@@ -14,74 +14,88 @@ interface FileItem {
   status: "uploading" | "done" | "error";
 }
 
+function getDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      resolve({ width: 0, height: 0 });
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+}
+
 export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [configReady, setConfigReady] = useState(false);
-  const configRef = useRef<{ cloudName: string; uploadPreset: string; folder: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  // Prefetch config on mount
-  useEffect(() => {
-    fetch("/api/upload/presigned")
-      .then((r) => r.json())
-      .then((cfg) => { configRef.current = cfg; setConfigReady(true); });
-  }, []);
-
   const uploadFile = useCallback(async (item: FileItem, index: number) => {
-    const cfg = configRef.current;
-    if (!cfg) return;
+    const dims = await getDimensions(item.file);
 
     const formData = new FormData();
     formData.append("file", item.file);
-    formData.append("upload_preset", cfg.uploadPreset);
-    formData.append("folder", cfg.folder);
+    formData.append("width", String(dims.width));
+    formData.append("height", String(dims.height));
 
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
-          setFiles((p) => p.map((f, i) => i === index ? { ...f, progress: Math.round((e.loaded / e.total) * 100) } : f));
+          setFiles((p) =>
+            p.map((f, i) =>
+              i === index ? { ...f, progress: Math.round((e.loaded / e.total) * 100) } : f
+            )
+          );
         }
       };
       xhr.onload = () => {
         if (xhr.status < 400) {
-          setFiles((p) => p.map((f, i) => i === index ? { ...f, status: "done", progress: 100 } : f));
+          setFiles((p) =>
+            p.map((f, i) => (i === index ? { ...f, status: "done", progress: 100 } : f))
+          );
           resolve();
         } else {
-          setFiles((p) => p.map((f, i) => i === index ? { ...f, status: "error" } : f));
+          setFiles((p) => p.map((f, i) => (i === index ? { ...f, status: "error" } : f)));
           reject();
         }
       };
       xhr.onerror = () => {
-        setFiles((p) => p.map((f, i) => i === index ? { ...f, status: "error" } : f));
+        setFiles((p) => p.map((f, i) => (i === index ? { ...f, status: "error" } : f)));
         reject();
       };
-      xhr.open("POST", `https://api.cloudinary.com/v1_1/${cfg.cloudName}/image/upload`);
+      xhr.open("POST", "/api/upload");
       xhr.send(formData);
     });
   }, []);
 
-  const handleFiles = useCallback(async (newFiles: File[]) => {
-    const images = newFiles.filter((f) => f.type.startsWith("image/")).slice(0, 20);
-    if (!images.length) return;
+  const handleFiles = useCallback(
+    async (newFiles: File[]) => {
+      const images = newFiles.filter((f) => f.type.startsWith("image/")).slice(0, 20);
+      if (!images.length) return;
 
-    const items: FileItem[] = images.map((f) => ({
-      file: f,
-      preview: URL.createObjectURL(f),
-      progress: 0,
-      status: "uploading",
-    }));
+      const items: FileItem[] = images.map((f) => ({
+        file: f,
+        preview: URL.createObjectURL(f),
+        progress: 0,
+        status: "uploading",
+      }));
 
-    setFiles((prev) => [...prev, ...items]);
-    const startIndex = files.length; // offset for existing files
+      const startIndex = files.length;
+      setFiles((prev) => [...prev, ...items]);
 
-    // Upload all immediately in parallel
-    await Promise.allSettled(items.map((item, i) => uploadFile(item, startIndex + i)));
+      await Promise.allSettled(items.map((item, i) => uploadFile(item, startIndex + i)));
 
-    onUploaded();
-    setTimeout(onClose, 1200);
-  }, [files.length, uploadFile, onUploaded, onClose]);
+      onUploaded();
+      setTimeout(onClose, 1200);
+    },
+    [files.length, uploadFile, onUploaded, onClose]
+  );
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) handleFiles(Array.from(e.target.files));
@@ -109,21 +123,18 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-4 gap-6">
-        {/* Pick buttons — shown before and during upload */}
         {!allDone && (
           <div className="w-full space-y-3">
             <button
               onClick={() => cameraRef.current?.click()}
-              disabled={!configReady}
-              className="btn-gold w-full py-5 rounded-2xl text-xl font-body font-bold flex items-center justify-center gap-3 text-dark disabled:opacity-40"
+              className="btn-gold w-full py-5 rounded-2xl text-xl font-body font-bold flex items-center justify-center gap-3 text-dark"
             >
               <span className="text-2xl">📸</span>
               <span>صوّر توا</span>
             </button>
             <button
               onClick={() => fileRef.current?.click()}
-              disabled={!configReady}
-              className="w-full py-4 rounded-2xl border-2 border-gold-500/40 text-gold-300 font-body font-bold text-lg flex items-center justify-center gap-3 hover:border-gold-400 transition-colors disabled:opacity-40"
+              className="w-full py-4 rounded-2xl border-2 border-gold-500/40 text-gold-300 font-body font-bold text-lg flex items-center justify-center gap-3 hover:border-gold-400 transition-colors"
             >
               <span className="text-2xl">🖼️</span>
               <span>اختار من الصور</span>
@@ -143,13 +154,18 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                       <div className="w-8 h-8 rounded-full border-2 border-gold-800 border-t-gold-400 animate-spin" />
                     </div>
                     <div className="absolute bottom-0 inset-x-0 h-1 bg-dark">
-                      <div className="h-full bg-gold-400 transition-all duration-200" style={{ width: `${item.progress}%` }} />
+                      <div
+                        className="h-full bg-gold-400 transition-all duration-200"
+                        style={{ width: `${item.progress}%` }}
+                      />
                     </div>
                   </>
                 )}
                 {item.status === "done" && (
                   <div className="absolute inset-0 bg-dark/40 flex items-center justify-center">
-                    <div className="w-9 h-9 rounded-full bg-gold-500 flex items-center justify-center text-dark text-lg font-bold">✓</div>
+                    <div className="w-9 h-9 rounded-full bg-gold-500 flex items-center justify-center text-dark text-lg font-bold">
+                      ✓
+                    </div>
                   </div>
                 )}
                 {item.status === "error" && (
@@ -172,7 +188,14 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       </div>
 
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onFileChange} />
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChange} />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={onFileChange}
+      />
     </div>
   );
 }

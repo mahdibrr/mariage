@@ -1,6 +1,6 @@
 export interface PhotoMetadata {
-  id: string;         // Cloudinary public_id
-  url: string;        // secure_url
+  id: string;
+  url: string;
   width: number;
   height: number;
   timestamp: string;
